@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"strings"
 
 	"go.starlark.net/starlark"
 )
@@ -10,9 +9,10 @@ import (
 // An embedded starlark script.
 const fib = `
 print("Starlark script started: ", greeting, "\n")
+print("inst is: ", inst, "\n")
 
-print(repeat("foo1", 3), "\n")
-print(repeat(s="foo2", n=2), "\n")
+placementMember("foo")
+placementRefuse("not allowed")
 
 def fibonacci(n):
     print("Starlark fibonacci function called")
@@ -23,25 +23,49 @@ def fibonacci(n):
     return res
 `
 
-// Defines a Go function that can be called from starlark called repeat(str, n=1).
-var repeat = func(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	var s string
-	var n int = 1
+var placementMember = func(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+	var memberName string
 
-	fmt.Printf("Go repeat function called: Position args: %+v, Keyword args: %+v\n", args, kwargs)
-
-	if err := starlark.UnpackArgs(b.Name(), args, kwargs, "s", &s, "n?", &n); err != nil {
+	if err := starlark.UnpackArgs(b.Name(), args, kwargs, "member", &memberName); err != nil {
 		return nil, err
 	}
 
-	return starlark.String(strings.Repeat(s, n)), nil
+	fmt.Printf("instPlacement: %v\n", memberName)
+
+	return starlark.None, nil
+}
+
+var placementRefuse = func(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+	var reason string
+
+	if err := starlark.UnpackArgs(b.Name(), args, kwargs, "reason", &reason); err != nil {
+		return nil, err
+	}
+
+	fmt.Printf("placementRefuse: %v\n", reason)
+
+	return starlark.None, nil
 }
 
 func main() {
+
+	s := starlark.NewDict(0)
+	s.SetKey(starlark.String("type"), starlark.String("image"))
+	s.SetKey(starlark.String("allow_inconsistent"), starlark.Bool(false))
+
+	d := starlark.NewDict(5)
+	d.SetKey(starlark.String("name"), starlark.String("foo"))
+	d.SetKey(starlark.String("stateful"), starlark.Bool(false))
+	d.SetKey(starlark.String("profiles"), starlark.NewList(nil))
+	d.SetKey(starlark.String("config"), starlark.NewDict(0))
+	d.SetKey(starlark.String("source"), s)
+
 	// Define the pre-declared global starlark environment the script will be run from.
 	predeclared := starlark.StringDict{
-		"greeting": starlark.String("hello"),              // Global string.
-		"repeat":   starlark.NewBuiltin("repeat", repeat), // Global function.
+		"greeting":        starlark.String("hello"),                                // Global string.
+		"placementMember": starlark.NewBuiltin("placementMember", placementMember), // Global function.
+		"placementRefuse": starlark.NewBuiltin("placementRefuse", placementRefuse), // Global function.
+		"inst":            d,
 	}
 
 	// Execute starlark script.
